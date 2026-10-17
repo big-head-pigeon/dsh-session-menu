@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+._*
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+*.swp
+
+# 离线验证产物（真协议测试把真包解到 /tmp，不落在仓库里）
+coverage/
+
+# 内部文档：项目状态 / 接力记录 / 下一轮提示词（含本机环境与对话摘要，不公开）
+docs/
+
+# 给 AI 协作者看的工程约束（内部约定，不公开）
+AGENTS.md
+preview-figs/
