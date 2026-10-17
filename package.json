@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-menu",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Session context menu for the DeepSeek Harness sidebar: mark unread, copy session info, open with your IDE, and permanently delete sessions.",
   "keywords": [
