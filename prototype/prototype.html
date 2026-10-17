@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DSH 会话右键菜单 · UI 原型 v3</title>
+<style>
+  /* 颜色与尺寸取自 DSH 真实主题令牌（深色）。插件实际注入的样式见 client.js 的 STYLE 常量。 */
+  :root{
+    --bg-base:#151517; --bg-layer-2:#2c2c2e; --bg-layer-3:#353638;
+    --label-primary:#f9fafb; --label-secondary:#cfd3d6; --label-tertiary:#adb2b8; --label-caption:#81858c;
+    --label-dimmed:#9a9ea5;
+    --hover:rgba(255,255,255,.08); --hover-danger:rgba(242,90,90,.15);
+    --border-l1:rgba(255,255,255,.06); --border-l2:rgba(255,255,255,.12);
+    --done:#22c55e; --warn:#f59e0b; --error:#f25a5a; --idle:#565759; --business:#7aaaff;
+    --radius-lg:16px; --radius-md:12px; --radius-sm:8px; --radius-panel:28px;
+    --menu-fill:rgba(67,69,74,.45);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg-base);color:var(--label-primary);
+    font:13px/20px -apple-system,"SF Pro Text","PingFang SC",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .stage{padding:26px;display:grid;gap:26px}
+  .panel[hidden]{display:none}
+  h2{margin:0 0 4px;font-size:15px;font-weight:600;letter-spacing:.2px}
+  .hint{margin:0 0 18px;color:var(--label-caption);font-size:12px;line-height:18px;max-width:880px}
+  .caption{color:var(--label-caption);font-size:11px;letter-spacing:.4px;margin-bottom:8px}
+  svg{display:block}
+
+  /* ---------- 侧边栏会话行 ---------- */
+  .cols{display:grid;grid-template-columns:340px 1fr;gap:30px;align-items:start}
+  .sidebar{background:var(--bg-base);border:1px solid var(--border-l1);border-radius:var(--radius-md);padding:8px;display:flex;flex-direction:column;gap:2px}
+  .ws{display:flex;align-items:center;gap:6px;padding:6px 8px;color:var(--label-tertiary);font-size:12px}
+  .row{display:flex;align-items:center;height:32px;padding:0 8px;border-radius:var(--radius-md);color:var(--label-primary);font-size:13px}
+  .row .lead{flex:none;width:16px;display:inline-flex;align-items:center;justify-content:center;color:var(--label-tertiary)}
+  .row .title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .time{flex:none;color:var(--label-caption);font-size:11px;margin-left:12px}
+  .row .actions{flex:none;display:none;align-items:center;gap:2px;margin-left:6px}
+  .row:hover .actions,.row.show-actions .actions{display:inline-flex}
+  .row.hovered{background:var(--hover)}
+  .row.archived .title{color:var(--label-caption)}
+  .icbtn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;border:0;border-radius:4px;background:none;color:var(--label-tertiary)}
+  .icbtn[data-tone=danger]{color:var(--error)}
+  .dot{position:relative;display:inline-block;flex:none;width:10px;height:10px;color:var(--idle)}
+  .dot::after{content:'';position:absolute;inset:20%;border-radius:50%;background:currentColor}
+  .dot[data-state=done]{color:var(--done)}
+  .dot[data-state=warning]{color:var(--warn)}
+  .dot[data-state=error]{color:var(--error)}
+  .dot[data-state=business]{color:var(--business)}
+  .spin{color:var(--label-tertiary);animation:spin 1.5s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .legend{display:grid;gap:12px;align-content:start;max-width:640px}
+  .legend .item{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;color:var(--label-secondary)}
+  .legend .k{display:inline-flex;align-items:center;justify-content:center;height:20px}
+  .legend b{color:var(--label-primary);font-weight:600}
+  .own{color:var(--business)}
+  .tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:5px;font-size:10px;line-height:15px;background:rgba(122,170,255,.16);color:var(--business);vertical-align:1px}
+  .tag.grey{background:rgba(255,255,255,.08);color:var(--label-caption)}
+
+  /* ---------- 菜单 ---------- */
+  .menus{display:grid;grid-template-columns:max-content max-content;gap:40px;align-items:start}
+  .menu{
+    padding:4px;min-width:206px;display:flex;flex-direction:column;border-radius:var(--radius-lg);
+    background:var(--menu-fill);backdrop-filter:blur(40px) saturate(150%);
+    box-shadow:0 0 0 1px var(--border-l1), 0 10px 30px rgba(0,0,0,.45), 0 0 40px rgba(0,0,0,.25);
+  }
+  .item{display:flex;align-items:center;gap:6px;width:100%;min-height:34px;padding:6px 8px;border-radius:var(--radius-md);color:var(--label-primary)}
+  .item .ico{display:inline-flex;flex:none;width:14px;height:14px;align-items:center;justify-content:center;color:var(--label-dimmed)}
+  .item .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .key{flex:none;margin-left:auto;padding-left:24px;color:var(--label-caption);font-size:11px}
+  .item.hover{background:var(--hover)}
+  .item.danger,.item.danger .ico{color:var(--error)}
+  .item.danger.hover{background:var(--hover-danger)}
+  .item .ico.own{color:var(--business)}
+  .item .chev{flex:none;margin-left:auto;display:inline-flex;width:12px;height:12px;align-items:center;justify-content:center;color:var(--label-caption)}
+  .sep{height:.5px;margin:3px 2px;background:var(--border-l2)}
+  .menu-wrap{position:relative}
+  /* 二级面板：真实实现里用 position:fixed + 10px 透明桥接带，这里按同样的几何摆位。 */
+  .flyout{
+    position:absolute;left:calc(100% + 10px);top:202px;min-width:163px;padding:4px;display:flex;flex-direction:column;
+    border-radius:var(--radius-lg);background:var(--menu-fill);backdrop-filter:blur(40px) saturate(150%);
+    box-shadow:0 0 0 1px var(--border-l1), 0 10px 30px rgba(0,0,0,.45), 0 0 40px rgba(0,0,0,.25);
+  }
+  .flyout .item{min-height:34px}
+  /* 打开方式里的图标是应用自己的图标（实现里是宿主给的 32x32 data URL），原型用近似的色块代替 */
+  .ico.app{border-radius:4px;display:flex;align-items:center;justify-content:center;font-style:normal}
+  .ico.app i{font-size:9px;font-weight:600;line-height:1;font-style:normal;color:#fff}
+  .ico.app.finder{background:linear-gradient(180deg,#4aa8ff,#1f7ae0)}
+  .ico.app.term{background:linear-gradient(180deg,#4b4b4f,#242427)}
+  .ico.app.xcode{background:linear-gradient(180deg,#5aa9ff,#2b6fd6)}
+  /* 真机里这一列是各应用自己的图标，所以这里也贴系统给的真图（prototype/app-icons/，由 JXA 取出） */
+  .ico.app.art{background:none}
+  .ico.app.art img{width:100%;height:100%;display:block;border-radius:3.5px}
+
+  /* ---------- 设置页「插件」列表里的一行 ---------- */
+  .pluginbox{background:#1b1c20;border:1px solid var(--border-l1);border-radius:14px;padding:14px 16px;
+             display:flex;align-items:center;gap:14px;max-width:700px}
+  .pluginbox .pico{flex:none;width:46px;height:46px;border-radius:12px;background:#232429;
+                   border:1px solid var(--border-l1);display:flex;align-items:center;justify-content:center}
+  .pluginbox .pico img{width:30px;height:30px;display:block}
+  .pluginbox .ptext{flex:1;min-width:0;overflow:hidden}
+  .pluginbox .ptitle{display:block;font-size:15px;font-weight:600;color:var(--label-primary);margin-bottom:3px}
+  .pluginbox .pdesc{display:block;font-size:13px;color:var(--label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pluginbox .pswitch{flex:none;width:46px;height:27px;border-radius:999px;background:#4D6BFE;position:relative}
+  .pluginbox .pswitch::after{content:"";position:absolute;top:3px;right:3px;width:21px;height:21px;border-radius:50%;background:#fff}
+  .pluginbox .pgroup{font-size:13px;color:var(--label-caption);margin:0 0 12px}
+
+  /* ---------- 悬浮卡 ---------- */
+  .hovercard{
+    width:320px;display:grid;gap:8px;padding:10px 12px;border-radius:var(--radius-md);
+    background:var(--bg-layer-3);box-shadow:0 0 0 1px var(--border-l1), 0 10px 30px rgba(0,0,0,.45);
+  }
+  .hovercard .hc-title{color:var(--label-primary);font-size:13px}
+  .hovercard .hc-line{display:flex;align-items:center;gap:8px;color:var(--label-tertiary);font-size:12px;line-height:20px}
+  .hovercard .hc-line.svc{gap:8px}
+  .hovercard .hc-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--label-secondary);font-size:12px}
+  .hovercard .hc-line svg{margin:0 -4px}
+  .hovercard .hc-line .dot{margin:0 -4px}
+  .annot{display:grid;gap:10px;align-content:start;max-width:360px;color:var(--label-secondary);font-size:12px;line-height:19px}
+  .annot .n b{color:var(--label-primary)}
+
+  /* ---------- 弹窗 ---------- */
+  .modals{display:grid;grid-template-columns:max-content max-content;gap:40px;align-items:start}
+  .modal{
+    width:380px;display:flex;flex-direction:column;gap:20px;padding:0 0 24px;border-radius:var(--radius-panel);
+    background:var(--bg-layer-2);box-shadow:0 0 0 1px var(--border-l1), 0 24px 60px rgba(0,0,0,.55);
+  }
+  .modal .head{padding:22px 22px 0;display:flex;align-items:flex-start;gap:12px}
+  .modal .m-title{margin:0 0 6px;font-size:15px;font-weight:600}
+  .modal .m-desc{margin:0;color:var(--label-secondary);font-size:13px;line-height:20px}
+  .modal .x{flex:none;margin-left:auto;color:var(--label-caption)}
+  .modal .m-body{padding:0 22px;display:grid;gap:14px}
+  .modal .m-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px 0}
+  .btn{min-width:72px;height:34px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--border-l2);background:transparent;color:var(--label-primary);font-size:13px;font-family:inherit}
+  .btn.danger{color:var(--error);border-color:rgba(242,90,90,.4)}
+  .btn:disabled{opacity:.4;color:var(--label-tertiary);border-color:var(--border-l1)}
+  .status-text{color:var(--label-secondary);font-size:12px}
+  .error-text{color:var(--error);font-size:12px}
+  .notes{display:grid;gap:12px;align-content:start;max-width:420px}
+  .notes .n{color:var(--label-secondary);font-size:12px;line-height:19px}
+  .notes .n b{color:var(--label-primary)}
+  .zoom{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--border-l1);border-radius:var(--radius-md);background:var(--bg-layer-2)}
+  .zoom .cap{color:var(--label-caption);font-size:11px}
+
+  /* ---------- 批量删除 ---------- */
+  .bulk{display:grid;grid-template-columns:290px max-content 1fr;gap:30px;align-items:start}
+  .wshead{display:flex;align-items:center;gap:4px;height:36px;padding:0 4px;border-radius:var(--radius-md);color:var(--label-tertiary)}
+  .wshead .wslabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:4px;font-size:12px}
+  .wshead .icbtn{width:28px;height:28px;border-radius:var(--radius-sm)}
+  .wshead .icbtn:hover{background:var(--hover)}
+  .owm-header{border:1px dashed rgba(122,170,255,.55)}
+  .own-hdr{color:var(--error)}
+  .own-hdr:hover{background:var(--hover-danger)}
+  .footmock{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:8px}
+  .footmock .usage{color:var(--label-caption);font-size:11px;line-height:16px}
+  .footmock .usage b{display:block;color:var(--label-primary);font-size:14px;font-weight:400}
+  .footrow{display:flex;align-items:center;gap:12px;color:var(--label-tertiary)}
+  .tip-host{position:relative;display:inline-flex}
+  .tip{
+    position:absolute;bottom:24px;left:50%;transform:translateX(-50%);white-space:nowrap;padding:5px 9px;border-radius:8px;
+    background:var(--bg-layer-3);box-shadow:0 0 0 1px var(--border-l1),0 6px 18px rgba(0,0,0,.5);color:var(--label-primary);font-size:11px;
+  }
+
+  /* ---------- 设置页里的「会话菜单」区块 ---------- */
+  /* 尺寸与间距按真机量：区块行 14px 标签 + 12px 说明，二级行缩进 12px、左竖线 1px、开关再往里收 14px。 */
+  .sheet{width:854px;display:grid;grid-template-columns:208px 1fr;border-radius:20px;overflow:hidden;
+         background:#232427;box-shadow:0 0 0 1px var(--border-l1),0 24px 60px rgba(0,0,0,.55);position:relative}
+  .sheet-top{position:absolute;top:14px;right:18px;display:flex;align-items:center;gap:12px}
+  .sheet-top .navclose{color:var(--label-caption);display:inline-flex}
+  .sheet-nav{background:#1b1c1f;padding:16px 10px;display:flex;flex-direction:column;gap:2px}
+  .sheet-nav .navhead{padding:4px 10px 14px}
+  .sheet-nav .navtitle{font-size:15px;font-weight:600}
+  .sheet-nav .openfile{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--border-l2);
+                       color:var(--label-secondary);font-size:12px;display:inline-flex;align-items:center}
+  .sheet-nav .navrow{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px;border-radius:8px;
+                     color:var(--label-secondary);font-size:13px}
+  .sheet-nav .navrow .ni{flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--label-tertiary)}
+  .sheet-nav .navrow.active{background:rgba(255,255,255,.09);color:var(--label-primary);font-weight:500}
+  .sheet-nav .navrow.active .ni{color:var(--label-primary)}
+  .sheet-body{padding:20px 26px 22px}
+  .sheet-body .s-title{font-size:15px;font-weight:600;margin:0 0 6px}
+  .srow{display:flex;align-items:flex-start;gap:16px;padding:13px 0;border-bottom:1px solid var(--border-l1)}
+  .srow:last-child{border-bottom:0}
+  .srow .stext{flex:1;min-width:0}
+  .srow .slabel{display:flex;align-items:center;gap:6px;font-size:14px;line-height:20px;color:var(--label-primary)}
+  .srow .shint{margin-top:2px;font-size:12px;line-height:18px;color:var(--label-caption)}
+  .srow .tri{flex:none;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;
+             color:var(--label-caption);transform:rotate(90deg)}
+  .sw{flex:none;width:40px;height:24px;margin-top:2px;border-radius:999px;background:#f7f8f9;position:relative}
+  .sw::after{content:"";position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:#0e1014}
+  .sw.off{background:#4e4e50}
+  .sw.off::after{right:auto;left:2px;background:#aeb4b9}
+  .schildren{margin-left:12px;padding-left:18px;border-left:1px solid var(--border-l2)}
+  .schildren .srow{padding:7px 14px 7px 0;border-bottom:0}
+  .schildren .srow .slabel{font-size:13px;color:var(--label-secondary)}
+  .schildren .sw{width:34px;height:20px}
+  .schildren .sw::after{width:16px;height:16px}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ ① 会话行状态点 ============ -->
+  <section class="panel" data-id="states">
+    <h2>① 会话行行首的状态点</h2>
+    <p class="hint">行首 16px 那一格由官方 <code>sidebar.session.row.leading</code> 座位渲染：官方状态（运行中 / 待处理 / 完成未读）优先级更高时整格被它占用，此时插件点不显示——这是官方渲染分支决定的，不是插件能绕开的。</p>
+    <div class="cols">
+      <div>
+        <div class="caption">侧边栏</div>
+        <div class="sidebar">
+          <div class="ws">Z_AI_WorkSpace</div>
+          <div class="row"><span class="lead"><span class="spin" data-icon="spinner"></span></span><span class="title">正在跑的会话</span></div>
+          <div class="row"><span class="lead"><span class="dot" data-state="warning"></span></span><span class="title">等我在弹窗里点确认</span></div>
+          <div class="row"><span class="lead"><span class="dot" data-state="done"></span></span><span class="title">跑完还没看过的会话</span></div>
+          <div class="row"><span class="lead"><span class="dot" data-state="business"></span></span><span class="title">我手动标成未读的会话</span></div>
+          <div class="row"><span class="lead"><span class="dot" data-state="error"></span></span><span class="title">上一轮报错的会话</span></div>
+          <div class="row"><span class="lead"></span><span class="title">普通会话</span></div>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="item"><span class="k"><span class="spin" data-icon="spinner"></span></span><span><b>运行中</b><span class="tag grey">官方</span><br>转圈图标，回合进行时出现。</span></div>
+        <div class="item"><span class="k"><span class="dot" data-state="warning"></span></span><span><b>等我处理</b><span class="tag grey">官方</span><br>等你批准、等你选计划、等你回答问题。</span></div>
+        <div class="item"><span class="k"><span class="dot" data-state="done"></span></span><span><b>完成未读</b><span class="tag grey">官方</span><br>回合跑完、你还没打开过这个会话。</span></div>
+        <div class="item"><span class="k"><span class="dot" data-state="business"></span></span><span><b>手动未读</b><span class="tag">本插件</span><br>右键「标记为未读」；打开会话即自动转回已读。只保存在本机浏览器里，不跨设备同步。</span></div>
+        <div class="item"><span class="k"><span class="dot" data-state="error"></span></span><span><b>上次运行出错</b><span class="tag">本插件</span><br>该会话最后一个回合的结局是 error；鼠标悬停有具体错误原因。</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ② 右键菜单 ============ -->
+  <section class="panel" data-id="menu">
+    <h2>② 会话右键菜单：改造前 / 改造后</h2>
+    <p class="hint">菜单是官方的 <code>sidebar.workspaces.session.menu.item</code> 座位，按 order 排序插入——插件的项夹在官方项之间或之后；蓝色图标的部分是本插件新增，官方五项与快捷键提示保持原样。</p>
+    <div class="menus">
+      <div>
+        <div class="caption">改造前（官方 5 项）</div>
+        <div class="menu">
+          <div class="item"><span class="ico" data-icon="pin"></span><span class="lbl">置顶会话</span></div>
+          <div class="item"><span class="ico" data-icon="rename"></span><span class="lbl">重命名</span><span class="key">⌥⌘G</span></div>
+          <div class="item"><span class="ico" data-icon="fork"></span><span class="lbl">分叉会话</span><span class="key">⌥⌘F</span></div>
+          <div class="item"><span class="ico" data-icon="archive"></span><span class="lbl">归档会话</span><span class="key">⇧⌘A</span></div>
+          <div class="item"><span class="ico" data-icon="copy"></span><span class="lbl">复制 Session ID</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="caption">改造后（10 项 · 一个真二级菜单）</div>
+        <div class="menu-wrap">
+          <div class="menu">
+            <div class="item"><span class="ico" data-icon="pin"></span><span class="lbl">置顶会话</span></div>
+            <div class="item"><span class="ico own" data-icon="eye"></span><span class="lbl">标记为未读</span></div>
+            <div class="item"><span class="ico" data-icon="rename"></span><span class="lbl">重命名</span><span class="key">⌥⌘G</span></div>
+            <div class="item"><span class="ico" data-icon="fork"></span><span class="lbl">分叉会话</span><span class="key">⌥⌘F</span></div>
+            <div class="item"><span class="ico" data-icon="archive"></span><span class="lbl">归档会话</span><span class="key">⇧⌘A</span></div>
+            <div class="item"><span class="ico" data-icon="copy"></span><span class="lbl">复制 Session ID</span></div>
+            <div class="sep"></div>
+            <div class="item"><span class="ico own" data-icon="copy"></span><span class="lbl">复制工作目录</span></div>
+            <div class="item"><span class="ico own" data-icon="browse"></span><span class="lbl">在访达中显示</span></div>
+            <div class="item hover"><span class="ico own" data-icon="open"></span><span class="lbl">打开方式</span><span class="chev" data-icon="chevron"></span></div>
+            <div class="sep"></div>
+            <div class="item danger"><span class="ico" data-icon="trash"></span><span class="lbl">永久删除会话</span></div>
+          </div>
+          <div class="flyout">
+            <div class="item"><span class="ico app art"><img src="app-icons/finder.png" alt=""></span><span class="lbl">用 访达 打开</span></div>
+            <div class="item"><span class="ico app art"><img src="app-icons/xcode.png" alt=""></span><span class="lbl">用 Xcode 打开</span></div>
+            <div class="item"><span class="ico app art"><img src="app-icons/claude.png" alt=""></span><span class="lbl">用 Claude 打开</span></div>
+            <div class="item"><span class="ico app art"><img src="app-icons/chatgpt.png" alt=""></span><span class="lbl">用 ChatGPT 打开</span></div>
+            <div class="item"><span class="ico app art"><img src="app-icons/terminal.png" alt=""></span><span class="lbl">用 终端 打开</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="annot">
+        <div class="n"><b>新增（order 150）</b>标记为未读 / 标记为已读：未读时是眼睛图标，已读后换成对勾。</div>
+        <div class="n"><b>新增（order 500）</b>复制：内核自己已经有「复制 Session ID」（order 450）时，我们那条默认关掉、整个二级菜单拍平成一行「复制工作目录」（截图里就是这种状态）；老内核上仍然是「复制会话 ID / 复制工作目录」两项。</div>
+        <div class="n"><b>新增（order 520–530）</b>在访达中显示 +「打开方式」二级菜单：只列能继续写代码的工具（IDE / 编辑器在前、终端在后，默认应用排最前，最多 8 个），代理 / 聊天 / 解压类一律不列。</div>
+        <div class="n"><b>二级菜单自绘</b>：官方菜单项组件不支持 submenu，所以插件自己画触发行与浮动面板（<code>position:fixed</code>，10px 透明桥接带防止鼠标经过缝隙时收起）。</div>
+        <div class="n"><b>新增（order 600）</b>永久删除会话：红字 + 上方分隔线，点击进入二次确认。</div>
+        <div class="n">官方五项的位置、快捷键提示、快捷键行为都保持原样。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ③ 删除确认弹窗 ============ -->
+  <section class="panel" data-id="delete">
+    <h2>③ 永久删除的二次确认</h2>
+    <p class="hint">沿用官方归档弹窗的骨架（<code>Modal</code> + 描边按钮）：不做勾选框，只有「取消 / 删除」两个按钮，删除按钮红字。确认后先停掉正在运行的回合，再摘除运行时、删除磁盘日志、清账本，并通知客户端立刻移除该行。</p>
+    <div class="modals">
+      <div>
+        <div class="caption">默认态</div>
+        <div class="modal">
+          <div class="head">
+            <div>
+              <p class="m-title">要删除会话？</p>
+              <p class="m-desc">将永久删除该会话及其子智能体会话，磁盘上的会话日志一并删除。此操作无法撤销。</p>
+            </div>
+            <span class="x" data-icon="close"></span>
+          </div>
+          <div class="m-foot"><button class="btn">取消</button><button class="btn danger">删除</button></div>
+        </div>
+      </div>
+      <div>
+        <div class="caption">进行中 / 失败</div>
+        <div class="modal">
+          <div class="head">
+            <div>
+              <p class="m-title">要删除会话？</p>
+              <p class="m-desc">将永久删除该会话及其子智能体会话，磁盘上的会话日志一并删除。此操作无法撤销。</p>
+            </div>
+            <span class="x" data-icon="close"></span>
+          </div>
+          <div class="m-body">
+            <div class="status-text">正在删除…</div>
+            <div class="error-text">删除失败：删除服务未就绪，请刷新界面后重试。</div>
+          </div>
+          <div class="m-foot"><button class="btn" disabled>取消</button><button class="btn danger" disabled>删除</button></div>
+        </div>
+      </div>
+      <div class="notes">
+        <div class="n">删除是<b>不可撤销</b>的，也不做回收站：确认后会话行立即从侧栏消失，磁盘上的 <code>sessions/&lt;项目&gt;/&lt;会话 id&gt;/</code> 目录被整体删除。</div>
+        <div class="n">正在运行的会话会先被<b>停止</b>（最多等 3 秒），再摘除运行时，避免边删边写留下半截日志。</div>
+        <div class="n">子智能体会话<b>一并删除</b>；归档集 / 置顶集里的残留 id 会被顺手清掉。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ④ 归档行的一键删除 ============ -->
+  <section class="panel" data-id="row">
+    <h2>④ 归档会话的一键删除入口</h2>
+    <p class="hint">归档后的会话在官方界面里只剩「取消归档」，行内没有任何删除入口。行内按钮座位对归档行仍然渲染，因此这里补一个垃圾桶图标：只在鼠标悬停（或菜单打开）时出现，位置在时间右侧、⋯ 按钮左边。</p>
+    <div class="cols">
+      <div>
+        <div class="caption">侧边栏（第三行处于悬停态）</div>
+        <div class="sidebar">
+          <div class="ws">Z_AI_WorkSpace</div>
+          <div class="row"><span class="lead"></span><span class="title">在跑的会话</span><span class="time">3 分钟</span></div>
+          <div class="row"><span class="lead"></span><span class="title">普通会话</span><span class="time">1 小时</span></div>
+          <div class="row hovered show-actions archived"><span class="lead"></span><span class="title">已归档的会话</span><span class="time">昨天</span>
+            <span class="actions">
+              <span class="icbtn" data-icon="unarchive"></span>
+              <span class="icbtn" data-tone="danger" data-icon="trash"></span>
+              <span class="icbtn" data-icon="ellipsis"></span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="zoom"><span class="icbtn" data-tone="danger" data-icon="trash"></span><span><b style="color:var(--label-primary)">永久删除这一行</b><br><span class="cap">悬停才出现，点击直接打开二次确认弹窗；不经过「取消归档」。</span></span></div>
+        <div class="item"><span class="k"><span class="icbtn" data-icon="unarchive"></span></span><span><b>取消归档</b><span class="tag grey">官方</span><br>官方原有按钮，位置与行为不变。</span></div>
+        <div class="item"><span class="k"><span class="icbtn" data-icon="ellipsis"></span></span><span><b>⋯ 菜单</b><span class="tag grey">官方</span><br>右键 / 左键都能打开，里面同样有「永久删除会话」。</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ⑤ 悬浮卡里的补充信息 ============ -->
+  <section class="panel" data-id="hover">
+    <h2>⑤ 鼠标悬浮卡里的会话信息</h2>
+    <p class="hint">官方悬浮卡（<code>sidebar.session.row.hover</code>）本来显示会话标题、最后活动时间与状态；插件在里面补三行：工作目录、上次运行出错、已标记为未读。三行都没内容时整块不渲染，不影响官方原有的内容。</p>
+    <div class="cols">
+      <div>
+        <div class="caption">悬浮卡（有报错 + 已标未读）</div>
+        <div class="hovercard">
+          <div class="hc-title">齐刘海 1 张图像</div>
+          <div class="hc-line"><span class="icbtn" data-icon="folder"></span><span class="hc-path">$WORKSPACE/01_Projects/raw-editor</span></div>
+          <div class="hc-line svc"><span class="dot" data-state="error"></span><span>上次运行出错：Selected model is at capacity. Please try a different model.</span></div>
+          <div class="hc-line svc"><span class="dot" data-state="business"></span><span>已标记为未读</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="caption">悬浮卡（普通会话，只有目录）</div>
+        <div class="hovercard">
+          <div class="hc-title">重点 UI 修复与性能提升</div>
+          <div class="hc-line"><span class="icbtn" data-icon="folder"></span><span class="hc-path">$WORKSPACE/01_Projects/pagebirdy</span></div>
+        </div>
+      </div>
+      <div class="notes">
+        <div class="n"><b>工作目录</b>取自会话行自带的 <code>cwd</code>，长路径省略显示。</div>
+        <div class="n"><b>上次运行出错</b>来自宿主投影 <code>sessionMenuStatus</code>：读完最后一个 <code>turn/end</code> 才知道是不是报错，所以冷会话要等投影缓存里已有该键才会显示（重新打开一次即可）。</div>
+        <div class="n"><b>已标记为未读</b>与行首蓝点是同一份本地状态。</div>
+        <div class="n">悬浮卡会延迟约 800ms 出现（官方行为，不是插件加的）。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ⑦ 设置页「插件」列表里的样子 ============ -->
+  <section class="panel" data-id="plugin">
+    <h2>⑦ 设置 → 插件 → 已安装</h2>
+    <p class="hint">装上以后在插件列表里长这样：图标、名字、一句话描述都来自插件自带的元数据。</p>
+    <p class="pgroup">已安装 12</p>
+    <div class="pluginbox">
+      <span class="pico"><img src="../icon.svg" alt=""></span>
+      <span class="ptext">
+        <span class="ptitle">会话菜单</span>
+        <span class="pdesc">标记未读、复制会话信息、在访达中显示或换 IDE 打开、永久删除会话，并给会话行加上状态点、悬浮卡信息和归档后的一键删除。</span>
+      </span>
+      <span class="pswitch"></span>
+    </div>
+  </section>
+
+  <!-- ============ ⑧ 设置页里的「会话菜单」 ============ -->
+  <section class="panel" data-id="settings">
+    <h2>⑧ 设置 →「会话菜单」</h2>
+    <p class="hint">八项开关都在这里，两级折叠：一级关掉时二级变灰并锁住。内核自带「复制 Session ID」时我们那条默认关掉（截图里就是这种状态），不用手动关。</p>
+    <div class="sheet">
+      <div class="sheet-top">
+        <span class="openfile">打开配置文件</span>
+        <span class="navclose" data-icon="close"></span>
+      </div>
+      <div class="sheet-nav">
+        <div class="navhead"><span class="navtitle">设置</span></div>
+        <div class="navrow"><span class="ni" data-icon="person"></span>账号与余额</div>
+        <div class="navrow"><span class="ni" data-icon="gear"></span>通用设置</div>
+        <div class="navrow"><span class="ni" data-icon="stack"></span>模型</div>
+        <div class="navrow"><span class="ni" data-icon="sliders"></span>内置插件</div>
+        <div class="navrow"><span class="ni" data-icon="robot"></span>Agent 预设</div>
+        <div class="navrow"><span class="ni" data-icon="docplus"></span>技能</div>
+        <div class="navrow active"><span class="ni" data-icon="dsm"></span>会话菜单</div>
+        <div class="navrow"><span class="ni" data-icon="grid"></span>插件市场</div>
+        <div class="navrow"><span class="ni" data-icon="columns"></span>侧边卡片</div>
+      </div>
+      <div class="sheet-body">
+        <p class="s-title">会话菜单</p>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel">标记未读</span>
+            <span class="shint">标成未读后行首亮蓝点，重新打开会话就消失</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel"><span class="tri" data-icon="tri"></span>复制</span>
+            <span class="shint">把会话 ID 或工作目录复制到剪贴板</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+        <div class="schildren">
+          <div class="srow">
+            <span class="stext"><span class="slabel">复制会话 ID</span></span>
+            <span class="sw off"></span>
+          </div>
+          <div class="srow">
+            <span class="stext"><span class="slabel">复制工作目录</span></span>
+            <span class="sw"></span>
+          </div>
+        </div>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel">在文件管理器中显示</span>
+            <span class="shint">在文件管理器里打开会话目录并选中它</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel"><span class="tri" data-icon="tri"></span>打开方式</span>
+            <span class="shint">用本机的编辑器或终端打开会话目录</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+        <div class="schildren">
+          <div class="srow">
+            <span class="stext"><span class="slabel">Xcode</span></span>
+            <span class="sw"></span>
+          </div>
+          <div class="srow">
+            <span class="stext"><span class="slabel">Claude</span></span>
+            <span class="sw"></span>
+          </div>
+          <div class="srow">
+            <span class="stext"><span class="slabel">ChatGPT</span></span>
+            <span class="sw"></span>
+          </div>
+          <div class="srow">
+            <span class="stext"><span class="slabel">终端</span></span>
+            <span class="sw"></span>
+          </div>
+        </div>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel">永久删除会话</span>
+            <span class="shint">从磁盘上删掉日志文件，子会话一起删</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel">删除所有已归档会话</span>
+            <span class="shint">一次清空所有已归档会话的日志文件</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel">状态点</span>
+            <span class="shint">行首显示未读与报错状态的小圆点</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+
+        <div class="srow">
+          <span class="stext">
+            <span class="slabel">悬浮卡</span>
+            <span class="shint">鼠标停在会话行上，显示工作目录和上次报错</span>
+          </span>
+          <span class="sw"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ⑥ 删除所有已归档会话 ============ -->
+  <section class="panel" data-id="bulk">
+    <h2>⑥ 删除所有已归档会话</h2>
+    <p class="hint">归档会话一多，逐条点垃圾桶太慢。批量入口有两个，共用同一个确认弹窗：① <b>「工作区」标题行最右侧的红垃圾桶</b> —— 只在你正看着归档会话时出现（视图里还有未归档的行就隐身），官方没给这一行留插槽，按钮是挂上去的原生节点；② 归档行的右键菜单项 —— 在「仅显示已归档」筛选下，随便右键哪一行都能拿到。</p>
+    <div class="bulk">
+      <div>
+        <div class="caption">「工作区」标题行最右侧（悬停显示提示）</div>
+        <div class="sidebar">
+          <div class="wshead">
+            <span class="wslabel">工作区</span>
+            <span class="icbtn" data-icon="search"></span>
+            <span class="icbtn" data-icon="sliders"></span>
+            <span class="icbtn" data-icon="addsquare"></span>
+            <span class="tip-host">
+              <span class="tip">删除所有已归档会话（3 个）</span>
+              <span class="icbtn own-hdr" data-tone="danger" data-icon="trash"></span>
+            </span>
+          </div>
+          <div class="row archived show-actions"><span class="lead"></span><span class="title">归档会话 A</span><span class="time">昨天</span>
+            <span class="actions"><span class="icbtn" data-tone="danger" data-icon="trash"></span><span class="icbtn" data-icon="unarchive"></span><span class="icbtn" data-icon="ellipsis"></span></span>
+          </div>
+          <div class="row archived"><span class="lead"></span><span class="title">归档会话 B</span><span class="time">3 天</span></div>
+          <div class="row archived"><span class="lead"></span><span class="title">归档会话 C</span><span class="time">上周</span></div>
+          <div class="footmock">
+            <div class="usage">今日消耗金额<b>$0</b></div>
+            <div class="footrow"><span class="icbtn" data-icon="archive"></span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="caption">批量确认弹窗</div>
+        <div class="modal">
+          <div class="head">
+            <div>
+              <h3 class="m-title">要删除所有已归档会话？</h3>
+              <p class="m-desc">将永久删除全部 <b style="color:var(--label-primary)">3</b> 个已归档会话及其子智能体会话，磁盘上的会话日志一并删除。此操作无法撤销。</p>
+            </div>
+            <span class="x" data-icon="close"></span>
+          </div>
+          <div class="m-body">
+            <div class="status-text">正在删除…</div>
+            <div class="status-text">已删除 2 个，1 个失败。</div>
+          </div>
+          <div class="m-foot"><button class="btn">取消</button><button class="btn danger">全部删除</button></div>
+        </div>
+      </div>
+      <div>
+        <div class="caption">归档行的右键菜单（末尾新增）</div>
+        <div class="menu" style="min-width:236px">
+          <div class="item"><span class="ico" data-icon="rename"></span><span class="lbl">重命名</span><span class="key">⌥⌘G</span></div>
+          <div class="item"><span class="ico" data-icon="pin"></span><span class="lbl">置顶会话</span></div>
+          <div class="item"><span class="ico own" data-icon="eye"></span><span class="lbl">标记为未读</span></div>
+          <div class="item"><span class="ico" data-icon="copy"></span><span class="lbl">复制</span><span class="chev" data-icon="chevron"></span></div>
+          <div class="sep"></div>
+          <div class="item"><span class="ico" data-icon="unarchive"></span><span class="lbl">取消归档</span><span class="key">⇧⌘A</span></div>
+          <div class="item danger"><span class="ico" data-icon="trash"></span><span class="lbl">删除所有已归档会话</span></div>
+          <div class="item danger"><span class="ico" data-icon="trash"></span><span class="lbl">永久删除会话…</span></div>
+        </div>
+        <div class="notes" style="margin-top:16px">
+          <div class="n"><b>按钮怎么进去的</b>：ui-workspace 没给标题行留插槽（那一行的搜索 / 筛选 / 新建工作区是硬编码渲染的，筛选状态也关在它私有的 view store 里），所以按钮是挂进标题行的原生节点 —— 唯一依赖是 CSS 模块的本地类名 <code>sectionHeader</code>（构建哈希前缀会变、本地名稳定），找不到锚点时整块隐身。</div>
+          <div class="n"><b>什么时候出现</b>：当前可见的会话行**全是归档行**时（即「仅显示已归档」这类视图），且提示里带个数；视图里还有未归档的行、或一个归档会话都没有时隐身。</div>
+          <div class="n"><b>删除过程</b>：串行逐个删，弹窗里显示「正在删除…」；部分失败会留在弹窗里报「已删除 x 个，y 个失败」，已删的不会回来，剩下的可以再点一次。</div>
+          <div class="n"><b>不做 undo</b>：物理删除不可恢复，确认成本靠红按钮 + 数量提示，而不是骗人的撤销提示。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  /* 内联图标：按 DSH 官方图标的房规自绘（16 格、fill:none、stroke:currentColor、strokeWidth 1）。 */
+  const P = {
+    spinner: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.6a6.4 6.4 0 1 1-6.4 6.4"/></svg>',
+    pin: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1.8h4l-.6 3.2 2.4 2.2H4.2l2.4-2.2L6 1.8Z"/><path d="M8 7.2v7"/></svg>',
+    rename: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.4 13.6 5 5.6 13H3v-2.6l8-8Z"/><path d="M9.6 3.8 12.2 6.4"/></svg>',
+    fork: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.5" cy="3.5" r="1.7"/><circle cx="11.5" cy="3.5" r="1.7"/><circle cx="8" cy="12.5" r="1.7"/><path d="M4.5 5.2v1.3c0 1 .8 1.8 1.8 1.8h3.4c1 0 1.8-.8 1.8-1.8V5.2"/><path d="M8 8.3v2.5"/></svg>',
+    archive: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3" width="11.6" height="3" rx="1"/><path d="M3.2 6v6.2c0 .6.5 1 1 1h7.6c.6 0 1-.4 1-1V6"/><path d="M6.6 8.8h2.8"/></svg>',
+    eye: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M1.3 8S3.6 3.8 8 3.8 14.7 8 14.7 8 12.4 12.2 8 12.2 1.3 8 1.3 8Z"/><circle cx="8" cy="8" r="2.1"/></svg>',
+    copy: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="5.4" y="5.4" width="8.2" height="8.2" rx="1.6"/><path d="M10.6 5.4V3.9c0-.8-.7-1.5-1.5-1.5H3.9c-.8 0-1.5.7-1.5 1.5v5.2c0 .8.7 1.5 1.5 1.5h1.5"/></svg>',
+    folder: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 12.4V4c0-.6.5-1.1 1.1-1.1h2.6l1.4 1.6h5.4c.6 0 1.1.5 1.1 1.1v6.8c0 .6-.5 1.1-1.1 1.1H3.3c-.6 0-1.1-.5-1.1-1.1Z"/></svg>',
+    browse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.2" cy="7.2" r="4.6"/><path d="m10.7 10.7 3 3"/></svg>',
+    open: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M9.4 2.8h3.8v3.8"/><path d="M13 3 8.4 7.6"/><path d="M12.2 9.8v3.1c0 .6-.5 1.1-1.1 1.1H3.9c-.6 0-1.1-.5-1.1-1.1V5.7c0-.6.5-1.1 1.1-1.1h3.1"/></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 4.4h10.4"/><path d="M6.2 4.4V3.2c0-.5.4-.9.9-.9h1.8c.5 0 .9.4.9.9v1.2"/><path d="M4.2 4.4l.6 8.2c0 .6.5 1 1.1 1h4.2c.6 0 1.1-.4 1.1-1l.6-8.2"/></svg>',
+    unarchive: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="2.2" y="3" width="11.6" height="3" rx="1"/><path d="M3.2 6v6.2c0 .6.5 1 1 1h7.6c.6 0 1-.4 1-1V6"/><path d="M8 12V8.4"/><path d="M6.4 10l1.6-1.6 1.6 1.6"/></svg>',
+    chevron: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6.2 3.6 4.4 4.4-4.4 4.4"/></svg>',
+    ellipsis: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.6" cy="8" r="1.1"/><circle cx="8" cy="8" r="1.1"/><circle cx="12.4" cy="8" r="1.1"/></svg>',
+    close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="m4.2 4.2 7.6 7.6"/><path d="m11.8 4.2-7.6 7.6"/></svg>',
+    search: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"><path d="M6.59 11.86a5.37 5.37 0 1 0 0-10.73 5.37 5.37 0 0 0 0 10.73Z"/><path d="m10.3 10.39 4.48 4.48"/></svg>',
+    sliders: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M2.3 5h5.85M12.05 5h1.65"/><circle cx="9.95" cy="5" r="1.45"/><path d="M2.3 11h1.65M7.85 11h5.85"/><circle cx="5.75" cy="11" r="1.45"/></svg>',
+    addsquare: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><path d="M5.54 2.07c.37 0 .72.13 1 .37l1.4 1.24v1.12a1.5 1.5 0 0 1-.62-.33L5.88 3.19a.46.46 0 0 0-.34-.12H2.95a.5.5 0 0 0-.5.5v8.86c0 .28.22.5.5.5h9.98a.5.5 0 0 0 .5-.5V8.54h1v3.89a1.5 1.5 0 0 1-1.5 1.5H2.95a1.5 1.5 0 0 1-1.5-1.5V3.57a1.5 1.5 0 0 1 1.5-1.5h2.6Z"/><path d="M9.76 4.5h4.79"/><path d="M12.15 6.9V2.11"/></svg>',
+    /* 设置页左侧导航的图标：真机里由内核按固定 id 分配，这里按同一风格近似画一套 */
+    person: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><circle cx="8" cy="5.4" r="2.4"/><path d="M3.5 13c.6-2.3 2.4-3.5 4.5-3.5s3.9 1.2 4.5 3.5"/></svg>',
+    gear: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><circle cx="8" cy="8" r="2.3"/><path d="M8 2.2v1.7M8 12.1v1.7M2.2 8h1.7M12.1 8h1.7M3.9 3.9l1.2 1.2M10.9 10.9l1.2 1.2M12.1 3.9l-1.2 1.2M5.1 10.9l-1.2 1.2"/></svg>',
+    stack: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><rect x="2.6" y="2.9" width="10.8" height="3" rx="1.2"/><rect x="2.6" y="6.6" width="10.8" height="3" rx="1.2"/><rect x="2.6" y="10.3" width="10.8" height="2.8" rx="1.2"/></svg>',
+    grid: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"><rect x="2.6" y="2.6" width="4.6" height="4.6" rx="1.2"/><rect x="8.8" y="2.6" width="4.6" height="4.6" rx="1.2"/><rect x="2.6" y="8.8" width="4.6" height="4.6" rx="1.2"/><rect x="8.8" y="8.8" width="4.6" height="4.6" rx="1.2"/></svg>',
+    robot: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><rect x="3" y="5.2" width="10" height="7.2" rx="2.2"/><circle cx="6.5" cy="8.8" r=".85" fill="currentColor" stroke="none"/><circle cx="9.5" cy="8.8" r=".85" fill="currentColor" stroke="none"/><path d="M8 5.2V3"/></svg>',
+    list: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M3.2 4.4h1.5M3.2 8h1.5M3.2 11.6h1.5"/><path d="M7 4.4h6M7 8h6M7 11.6h6"/></svg>',
+      docplus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="2.2"/><path d="M8 5.9v4.2M5.9 8h4.2"/></svg>',
+      columns: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="2.7" y="4.4" width="1.9" height="7.2" rx=".95"/><rect x="6.1" y="4.4" width="1.9" height="7.2" rx=".95"/><rect x="9.5" y="4.4" width="1.9" height="7.2" rx=".95"/><rect x="12.9" y="4.4" width="1.9" height="5" rx=".95"/></svg>',
+    dsm: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M2.8 4h7.4M2.8 8h5.4M2.8 12h7.4"/><circle cx="13" cy="4" r=".9" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="13" cy="12" r=".9" fill="currentColor" stroke="none"/></svg>',
+    bag: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 5.6h10.4v6.6c0 .6-.5 1-1 1H3.8c-.6 0-1-.4-1-1V5.6Z"/><path d="M5.6 5.6V4.2c0-1.4 1-2.4 2.4-2.4s2.4 1 2.4 2.4v1.4"/></svg>',
+    cards: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><rect x="2.6" y="3" width="10.8" height="10" rx="1.8"/><path d="M6.4 3v10"/></svg>',
+    tri: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5.6 3.4 11.2 8l-5.6 4.6V3.4Z"/></svg>'
+  };
+  document.querySelectorAll('[data-icon]').forEach((el) => {
+    const svg = P[el.dataset.icon];
+    if (svg !== void 0 && el.innerHTML.trim() === "") el.innerHTML = svg;
+  });
+
+  /* 二级面板对准它那一行（真机里是 position:fixed 贴着触发行摆的，这里也按行算，别写死像素）。 */
+  document.querySelectorAll(".menu-wrap").forEach((wrap) => {
+    const row = wrap.querySelector(".item.hover");
+    const fly = wrap.querySelector(".flyout");
+    if (row !== null && fly !== null) fly.style.top = row.offsetTop + "px";
+  });
+
+  /* ?panel=states|menu|delete|row|hover|bulk 只显示其中一块，方便逐块截图。 */
+  const params = new URLSearchParams(location.search);
+  const only = params.get("panel");
+  if (only !== null) document.querySelectorAll(".panel").forEach((el) => { el.hidden = el.dataset.id !== only; });
+
+  /*
+   * ?bare=1 只留演示区（去掉标题、说明段落与右侧注解），用来出 README 的图；
+   * ?lang=en 把演示区里的中文换成英文 —— 文案表就下面这一张，值缺了自动保持中文。
+   */
+  if (params.get("bare") === "1") {
+    const style = document.createElement("style");
+    /*
+     * 出 README 的图时要用真机的观感：插件新增的那几个菜单项在真机里**和官方图标同色**，
+     * 设计稿里把它们标成 --business 蓝只是为了在文档里一眼看出「哪几个是插件加的」，那属于标注，
+     * 不属于产品外观，所以 bare 模式下抹掉。
+     */
+    style.textContent = ".panel h2,.panel .hint,.panel .annot,.panel .notes,.panel .legend{display:none}"
+      + ".stage{padding:22px;gap:0}.panel[hidden]{display:none}"
+      + ".panel .item .ico.own{color:var(--label-dimmed)}";
+    document.head.appendChild(style);
+  }
+
+  const EN = {
+    "置顶会话": "Pin session", "标记为未读": "Mark as unread", "重命名": "Rename",
+    "分叉会话": "Fork session", "归档会话": "Archive session", "取消归档": "Unarchive",
+    "复制": "Copy", "在访达中显示": "Reveal in Finder", "打开方式": "Open with",
+    "永久删除会话": "Delete session", "删除所有已归档会话": "Delete all archived sessions",
+    "用 访达 打开": "Open with Finder", "用 Xcode 打开": "Open with Xcode", "用 Claude 打开": "Open with Claude",
+    "用 ChatGPT 打开": "Open with ChatGPT", "用 终端 打开": "Open with Terminal",
+    "改造前（官方 5 项）": "Before — the shipped 5 items",
+    "改造后（10 项 · 一个真二级菜单）": "After — 10 items, one real submenu",
+    "侧边栏（第三行处于悬停态）": "Sidebar (third row hovered)",
+    "归档行的右键菜单（末尾新增）": "Archived row menu (new item at the end)",
+    "悬浮卡（普通会话，只有目录）": "Hover card (plain session, directory only)",
+    "悬浮卡（有报错 + 已标未读）": "Hover card (last error + marked unread)",
+    "「工作区」标题行最右侧（悬停显示提示）": "Workspaces header row, far right (tooltip on hover)",
+    "批量确认弹窗": "Bulk confirmation",
+    "默认态": "Default", "普通会话": "Plain session", "在跑的会话": "Running session",
+    "在跑的会话": "Running session", "正在跑的会话": "Running session", "上一轮报错的会话": "Last turn failed",
+    "跑完还没看过的会话": "Finished, not read yet", "我手动标成未读的会话": "Marked unread by hand",
+    "已归档的会话": "Archived session", "归档会话 A": "Archived session A", "归档会话 B": "Archived session B",
+    "归档会话 C": "Archived session C", "进行中 / 失败": "running / failed", "进行中": "running",
+    "删除": "Delete", "取消": "Cancel", "全部删除": "Delete all", "关闭": "Close",
+    "正在删除…": "Deleting…", "永久删除会话…": "Delete session…",
+    "要删除会话？": "Delete this session?", "要删除所有已归档会话？": "Delete all archived sessions?",
+    "将永久删除该会话及其子智能体会话，磁盘上的会话日志一并删除。此操作无法撤销。":
+      "This permanently deletes the session and its subagent sessions, including the session log on disk. This cannot be undone.",
+    "将永久删除全部": "This permanently deletes all",
+    "个已归档会话及其子智能体会话，磁盘上的会话日志一并删除。此操作无法撤销。":
+      " archived sessions and their subagent sessions, including the session logs on disk. This cannot be undone.",
+    "已标记为未读": "Marked as unread", "上次运行出错": "Last run failed",
+    "上次运行出错：Selected model is at capacity. Please try a different model.":
+      "Last run failed: Selected model is at capacity. Please try a different model.",
+    "删除失败：删除服务未就绪，请刷新界面后重试。": "Delete failed: The delete service is not ready yet; refresh and try again.",
+    "已删除 2 个，1 个失败。": "Deleted 2, 1 failed.",
+    "删除所有已归档会话（3 个）": "Delete all archived sessions (3)",
+    "侧边栏": "Sidebar", "工作区": "Workspaces", "今日消耗金额": "Today's spend",
+    "上周": "Last week", "昨天": "Yesterday", "3 天": "3 days", "1 小时": "1 hour", "3 分钟": "3 min",
+    "齐刘海 1 张图像": "Screenshot 1 image", "重点 UI 修复与性能提升": "Key UI fixes and perf work",
+    "访": "F", "等我在弹窗里点确认": "waiting for my confirmation",
+    "设置 → 插件 → 已安装": "Settings → Plugins → Installed",
+    "装上以后在插件列表里长这样：图标、名字、一句话描述都来自插件自带的元数据。":
+      "How it looks in the plugin list: icon, name and one-line description all come from the metadata shipped inside the plugin.",
+    "已安装": "Installed",
+    "会话菜单": "Session menu",
+    "标记未读、复制会话信息、在访达中显示或换 IDE 打开、永久删除会话，并给会话行加上状态点、悬浮卡信息和归档后的一键删除。":
+      "Mark unread, copy session info, reveal in Finder or open with your IDE, permanently delete sessions — plus status dots, hover-card details and one-click delete for archived rows.",
+    /* 设置区块（section ⑧） */
+    "设置": "Settings", "打开配置文件": "Open config file",
+    "账号与余额": "Account & balance", "通用设置": "General", "模型": "Models",
+    "内置插件": "Built-in plugins", "Agent 预设": "Agent presets", "技能": "Skills",
+    "插件市场": "Plugin market", "侧边卡片": "Sidebar cards",
+    "复制 Session ID": "Copy session ID", "复制会话 ID": "Copy session ID", "复制工作目录": "Copy working directory",
+    "标记未读": "Mark as unread",
+    "标成未读后行首亮蓝点，重新打开会话就消失": "Adds a blue dot until you reopen the session",
+    "把会话 ID 或工作目录复制到剪贴板": "Copies the session ID or working directory",
+    "在文件管理器中显示": "Show in file manager",
+    "在文件管理器里打开会话目录并选中它": "Reveals the session folder in your file manager",
+    "用本机的编辑器或终端打开会话目录": "Opens the session folder in your editor or terminal",
+    "从磁盘上删掉日志文件，子会话一起删": "Removes the log from disk, child sessions too",
+    "一次清空所有已归档会话的日志文件": "Clears the logs of every archived session at once",
+    "状态点": "Status dots",
+    "行首显示未读与报错状态的小圆点": "Dots for unread and failed sessions",
+    "悬浮卡": "Hover card",
+    "鼠标停在会话行上，显示工作目录和上次报错": "Shows the working directory and last error on hover",
+    "终端": "Terminal"
+  };
+
+  if (params.get("lang") === "en") {
+    const swap = (text) => {
+      const trimmed = text.trim();
+      const hit = EN[trimmed];
+      return hit === void 0 ? text : text.replace(trimmed, hit);
+    };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode() !== null) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const next = swap(node.nodeValue);
+      if (next !== node.nodeValue) node.nodeValue = next;
+    }
+    document.documentElement.lang = "en";
+  }
+</script>
+</body>
+</html>
