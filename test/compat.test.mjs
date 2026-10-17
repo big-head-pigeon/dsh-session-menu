@@ -139,6 +139,31 @@ function satisfies(versionText, range) {
 		});
 }
 
+// Same matcher under npm's default rules, i.e. without `includePrerelease`.
+// npm reads a range as "prereleases are excluded unless one of the comparators
+// names the very same x.y.z with a prerelease tag". A plain `>=0.2.0-rc.2`
+// therefore rejects `0.2.1-rc.2` at install time and npm aborts with ERESOLVE
+// even though the kernel's own check accepts it - two different matchers, and a
+// manifest has to keep both happy.
+function satisfiesNpmDefault(versionText, range) {
+	const version = parseVersion(versionText);
+	if (!version) return false;
+	return String(range)
+		.split("||")
+		.some((alternative) => {
+			const tokens = alternative.trim().split(/\s+/).filter(Boolean);
+			if (tokens.length === 0) return false;
+			if (!tokens.every((token) => satisfiesComparator(version, token))) return false;
+			if (!version.pre) return true;
+			return tokens.some((token) => {
+				const body = /^(>=|<=|>|<|=|\^|~)?\s*(.+)$/.exec(token.trim());
+				const target = body ? parseVersion(body[2]) : null;
+				if (!target || !target.pre) return false;
+				return target.nums[0] === version.nums[0] && target.nums[1] === version.nums[1] && target.nums[2] === version.nums[2];
+			});
+		});
+}
+
 /* ------------------------------------------------------------- manifests */
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -193,6 +218,10 @@ if (realSemver) {
 				agreed = false;
 				failures.push(`本地 semver 子集与真 semver 不一致: ${version} vs ${range}`);
 			}
+			if (satisfiesNpmDefault(version, range) !== realSemver.satisfies(version, range)) {
+				agreed = false;
+				failures.push(`npm 默认规则下的判定与真 semver 不一致: ${version} vs ${range}`);
+			}
 		}
 	}
 	check("本地 semver 子集与真 semver 结论一致", agreed);
@@ -222,6 +251,13 @@ for (const kernel of kernels) {
 			`当前内核被接受: ${kernel.version} vs ${name} ${range}`,
 			satisfies(kernel.version, range),
 			`DSH 会禁用本插件。清单里的范围开不出这个版本，改成只写下限的范围，例如 ">=${kernel.version}"`,
+		);
+		check(
+			`npm 安装时不会 ERESOLVE: ${kernel.version} vs ${name} ${range}`,
+			satisfiesNpmDefault(kernel.version, range),
+			`内核版本带预发布标签时，npm 只在范围里出现同一个 x.y.z 的预发布比较符时才认它，` +
+				`否则 npm install 直接报 ERESOLVE。给内核当前的每个预发布分支各开一段，` +
+				`例如 ">=0.2.0-rc.2 <0.2.1-rc.0 || >=0.2.1-rc.1 <0.2.2-rc.0 || >=0.2.2-rc.0 <0.3.0-0 || >=0.3.0-0"`,
 		);
 	}
 }

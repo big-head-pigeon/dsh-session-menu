@@ -16,7 +16,7 @@ node test/client.test.mjs
 python3 test/extract-asar-pkgs.py            # 只需在 /tmp 被清理、或内核更新后重建
 node test/real-protocol.test.mjs             # 快照内核与当前内核不一致时直接失败，不会拿旧包跑出绿的
 
-# 内核兼容：清单里的 dsh 要求 + 我们依赖的插槽/原语，对着本机每个 DSH 内核逐条核（63 项，改 peerDependencies 或升级 DSH 后必跑）
+# 内核兼容：清单里的 dsh 要求 + 我们依赖的插槽/原语，对着本机每个 DSH 内核逐条核（65 项，改 peerDependencies 或升级 DSH 后必跑）
 node test/compat.test.mjs
 ```
 
@@ -37,11 +37,15 @@ node test/compat.test.mjs
 `@deepseek-ai/dsh*` 的 peer，任何一条不满足就往 profile 写 `disabled: true` —— 插件直接消失，且只有重启才看得到。
 0.1.0 的精确值 `0.2.0-rc.2` 就是这么在内核升到 `0.2.1-rc.2` 时被禁用的。
 
+还有**第二个匹配器**：npm 装包时用默认规则（不带 `includePrerelease`），预发布版本只有范围里出现**同一个 x.y.z** 的比较符时才认。
+只写 `>=0.2.0-rc.2` 时，对着已经装好的 `0.2.1-rc.2` 会直接 `npm error code ERESOLVE`（已实测复现，退出码 1）。
+所以 `package.json` 里把每个预发布分支各开一段，两条检查都跑：内核那条保「不被禁用」，npm 那条保「装得上」。
+
 `compat.test.mjs` 因此同时管两头：**当前装着的内核**（本机有官方版和社区版两个，版本还不一样）必须都被接受，
 **下一个 patch / minor / major** 也必须被接受 —— 后者才是「下次内核更新会不会又炸」的答案。
 内核版本不是从 `Info.plist` 的 `CFBundleShortVersionString` 读的（社区版那是 `0.12.0`，跟内核版本无关），
 而是按内核自己的做法从 `app.asar` 里的启动包 `package.json` 读 `version`。
-想让自检直接检查 `>=0.2.0-rc.2` 能开哪些版本：`DSH_VERSION=0.3.0 node test/compat.test.mjs`。
+想拿别的内核版本试：`DSH_VERSION=0.3.0 node test/compat.test.mjs`（`0.3.1-rc.1` 这种新分支的预发布版本会故意跑红，提醒去补一段范围）。
 
 ## 内核更新后插件报错的三条路径
 
