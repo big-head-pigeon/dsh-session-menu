@@ -1,0 +1,53 @@
+{
+  "name": "dsh-session-menu",
+  "version": "0.1.1",
+  "type": "module",
+  "description": "Session context menu for the DeepSeek Harness sidebar: mark unread, copy session info, open with your IDE, and permanently delete sessions.",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "context-menu",
+    "sidebar"
+  ],
+  "license": "MIT",
+  "author": "big-head-pigeon",
+  "homepage": "https://github.com/big-head-pigeon/dsh-session-menu#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/big-head-pigeon/dsh-session-menu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/big-head-pigeon/dsh-session-menu/issues"
+  },
+  "main": "index.js",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    },
+    "manifestVersion": 1
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.2",
+    "react": "^18.2.0 || ^19.0.0"
+  }
+}

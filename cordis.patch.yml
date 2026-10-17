@@ -1,0 +1,43 @@
+- insert:
+    - id: dsh-session-menu
+      name: 'dsh-session-menu'
+      # 「打开方式」的应用清单。不写就用 index.js 的 DEFAULT_DEVELOPER_APPS（IDE → AI 助手 → 终端）。
+      # kind 只影响可读性（editor / ai / terminal 都行）；paths 是同一项的候选 .app 绝对路径，
+      # 命中第一个存在的就把那一项列进菜单。
+      # ⚠️ config 是**整体替换**，不是追加：取消注释后，想要的每一项都得写上。
+      # config:
+      #   applications:
+      #     - kind: editor
+      #       paths:
+      #         - /Applications/Visual Studio Code.app
+      #         - /Applications/Visual Studio Code - Insiders.app
+      #     - kind: editor
+      #       paths:
+      #         - /Applications/Xcode.app
+      #     # 下面四项 2026-10-16 从默认清单移除：本机连双击都起不来（ZCode 能起但不认文件夹）。
+      #     # app 修好后取消注释即可加回。
+      #     - kind: editor
+      #       paths:
+      #         - /Applications/Trae.app
+      #         - /Applications/Trae CN.app
+      #     - kind: editor
+      #       paths:
+      #         - /Applications/Antigravity.app
+      #     - kind: editor
+      #       paths:
+      #         - /Applications/OpenCode.app
+      #     - kind: editor
+      #       paths:
+      #         - /Applications/ZCode.app
+      #     - kind: ai
+      #       paths:
+      #         - /Applications/Claude.app
+      #         - /Applications/ChatGPT.app
+      #     # WorkBuddy 也注册了 public.folder、open -a 也返回 0，但实测点下去接不住目录，
+      #     # 所以默认清单里没有它。想再试一次就把它加回上面那段 paths 里，或者单开一项：
+      #     # - kind: ai
+      #     #   paths:
+      #     #     - /Applications/WorkBuddy.app
+      #     - kind: terminal
+      #       paths:
+      #         - /System/Applications/Utilities/Terminal.app

@@ -1,0 +1,9 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="dsh-session-menu">
+  <!-- 三行会话（由深到浅）+ 右边三个点：就是本插件加的那个「⋯」触发按钮 -->
+  <rect x="3.5" y="6.8" width="17" height="2.8" rx="1.4" fill="#4D6BFE"/>
+  <rect x="3.5" y="14.6" width="17" height="2.8" rx="1.4" fill="#4D6BFE" fill-opacity=".55"/>
+  <rect x="3.5" y="22.4" width="10.5" height="2.8" rx="1.4" fill="#4D6BFE" fill-opacity=".28"/>
+  <circle cx="26" cy="8.2" r="1.9" fill="#4D6BFE"/>
+  <circle cx="26" cy="16" r="1.9" fill="#4D6BFE"/>
+  <circle cx="26" cy="23.8" r="1.9" fill="#4D6BFE"/>
+</svg>
